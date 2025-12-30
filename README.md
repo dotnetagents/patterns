@@ -1,77 +1,129 @@
 # DotNetAgents Patterns
 
-Code examples for 21 agentic AI patterns using Microsoft Agent Framework for .NET.
+Benchmark framework for comparing LLM agent patterns using Microsoft Agent Framework for .NET.
+
+## What's Included
+
+- **Pattern implementations** comparing multi-agent vs single-agent approaches
+- **BenchmarkLlm framework** for measuring quality, tokens, and latency
+- **LLM-as-Judge evaluation** with 8 quality dimensions
+- **Support for multiple LLM providers**: Ollama, OpenAI, Azure OpenAI, OpenRouter
 
 ## Prerequisites
 
 - .NET 8.0+ SDK
-- Azure OpenAI resource or OpenAI API key
-- Azure CLI (for Azure OpenAI authentication)
+- An LLM provider configured (see below)
 
-## Environment Setup
+## LLM Provider Setup
 
-Set the following environment variables:
+Configure your preferred provider in `appsettings.json`:
 
-```bash
-# Windows PowerShell
-$env:AZURE_OPENAI_ENDPOINT = "https://your-resource.openai.azure.com/"
-$env:AZURE_OPENAI_DEPLOYMENT_NAME = "gpt-4o-mini"
+### Ollama (Free, Local)
+```json
+{
+  "LlmProvider": "ollama",
+  "OllamaEndpoint": "http://localhost:11434",
+  "OllamaModel": "llama3.2"
+}
+```
 
-# Linux/macOS
-export AZURE_OPENAI_ENDPOINT=https://your-resource.openai.azure.com/
-export AZURE_OPENAI_DEPLOYMENT_NAME=gpt-4o-mini
+### OpenAI
+```json
+{
+  "LlmProvider": "openai",
+  "OpenAiApiKey": "sk-...",
+  "OpenAiModel": "gpt-4.1"
+}
+```
+
+### Azure OpenAI
+```json
+{
+  "LlmProvider": "azure",
+  "AzureOpenAiEndpoint": "https://your-resource.openai.azure.com/",
+  "AzureOpenAiDeployment": "gpt-4o"
+}
+```
+
+### OpenRouter
+```json
+{
+  "LlmProvider": "openrouter",
+  "OpenRouterApiKey": "sk-or-...",
+  "OpenRouterModel": "openai/gpt-4.1"
+}
 ```
 
 ## Patterns
 
-### Foundation Patterns (Beginner)
+| # | Pattern | Description | Status |
+|---|---------|-------------|--------|
+| 1 | [Prompt Chaining](./01-prompt-chaining/) | Sequential agents where output feeds the next | ✅ Complete |
+| 2 | Tool Use | Agents calling external functions/APIs | 🔜 Coming |
+| 3 | Routing | Conditional logic to select execution paths | 🔜 Coming |
+| 4 | Parallelization | Running multiple agent tasks concurrently | 🔜 Coming |
 
-| # | Pattern | Description |
-|---|---------|-------------|
-| 1 | [Prompt Chaining](./01-prompt-chaining/) | Sequential LLM calls where output feeds the next prompt |
-| 2 | Tool Use | Agents calling external functions/APIs |
-| 3 | Routing | Conditional logic to select execution paths |
-| 4 | Parallelization | Running multiple agent tasks concurrently |
-
-### Core Patterns (Intermediate)
-
-| # | Pattern | Description |
-|---|---------|-------------|
-| 5 | Reflection | Agents critiquing and improving their outputs |
-| 6 | Planning | Breaking down complex tasks into subtasks |
-| 7 | Multi-Agent Collaboration | Multiple specialized agents working together |
-| 8 | Memory Management | Short-term and long-term memory for agents |
-
-### Advanced Patterns (Advanced)
-
-| # | Pattern | Description |
-|---|---------|-------------|
-| 9+ | Coming Soon | More patterns being added... |
-
-## Running a Pattern
+## Quick Start
 
 ```bash
 cd 01-prompt-chaining/src/PromptChaining
+
+# Run the default workflow
 dotnet run
+
+# List available benchmarks
+dotnet run -- --list-benchmarks
+
+# Run benchmarks with evaluation
+dotnet run -- --benchmark
 ```
 
-## Running Tests
+## Running Benchmarks
+
+The BenchmarkLlm framework measures and compares agent approaches:
 
 ```bash
-cd 01-prompt-chaining/tests/PromptChaining.Tests
-dotnet test
+# Run all benchmarks
+dotnet run -- --benchmark
+
+# Evaluate a previous run
+dotnet run -- --evaluate ./runs/<run-id>
+```
+
+Results are saved to `runs/` with:
+- `output.md` - Generated content from each approach
+- `comparison.md` - Side-by-side metrics
+- `analysis.md` - LLM-as-Judge quality evaluation
+
+### Quality Dimensions
+
+The LLM-as-Judge evaluates content across 8 dimensions:
+- Completeness, Structure, Accuracy, Engagement
+- Evidence Quality, Balance, Actionability, Depth
+
+## Project Structure
+
+```
+patterns/
+├── 01-prompt-chaining/          # Pattern 1: Prompt Chaining
+│   └── src/PromptChaining/
+│       ├── UseCases/            # Multi-agent and single-agent implementations
+│       └── appsettings.json     # LLM provider configuration
+├── src/
+│   ├── DotNetAgents.Infrastructure/   # ChatClientFactory, WorkflowRunner
+│   └── DotNetAgents.BenchmarkLlm/     # Benchmarking framework
+└── runs/                        # Benchmark results (gitignored)
 ```
 
 ## Learn More
 
 - [DotNetAgents.net](https://dotnetagents.net) - Full tutorials and explanations
 - [Microsoft Agent Framework](https://learn.microsoft.com/en-us/agent-framework/) - Official documentation
-- [GitHub](https://github.com/microsoft/agent-framework) - Framework source code
 
 ## License
 
-MIT License - See [LICENSE](./LICENSE) for details.
+MIT License
 
 ---
 
-*Inspired by "Agentic Design Patterns" by Antonio Gulli. Implementations are original content using Microsoft Agent Framework.*
+*Inspired by [Agentic Design Patterns](https://www.amazon.com/Agentic-Design-Patterns-Hands-Intelligent/dp/3032014018) by Antonio Gulli. Implementations are original content using Microsoft Agent Framework.*
