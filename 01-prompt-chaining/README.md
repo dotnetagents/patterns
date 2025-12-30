@@ -12,196 +12,138 @@ Prompt Chaining is a foundational agentic pattern that breaks complex tasks into
 
 ## Quick Start
 
-### Prerequisites
-
-- .NET 10.0 SDK or later
-- One of the following LLM providers:
-  - **Ollama** (free, local) - Recommended for learning
-  - **OpenAI** API key
-  - **Azure OpenAI** resource
-  - **OpenRouter** API key
-
-### Setup
-
-Create a `.env` file in the project root or set environment variables:
-
-#### Option 1: Ollama (Free, Local) - Default
-
-```bash
-# Install Ollama from https://ollama.com
-ollama pull llama3.2
-
-# Run (no env vars needed, uses defaults)
-cd src/PromptChaining
-dotnet run
-```
-
-#### Option 2: OpenAI
-
-```bash
-LLM_PROVIDER=openai
-API_KEY=sk-...
-MODEL=gpt-4o-mini
-```
-
-#### Option 3: Azure OpenAI
-
-```bash
-LLM_PROVIDER=azure
-API_KEY=your-api-key
-ENDPOINT=https://your-resource.openai.azure.com/
-MODEL=gpt-4o-mini
-```
-
-#### Option 4: OpenRouter
-
-```bash
-LLM_PROVIDER=openrouter
-API_KEY=sk-or-...
-MODEL=openai/gpt-4o-mini
-```
-
-### Run
-
 ```bash
 cd src/PromptChaining
 
-# Interactive mode
+# Run the default workflow
 dotnet run
 
 # List available benchmarks
 dotnet run -- --list-benchmarks
 
-# Run benchmarks
+# Run benchmarks with evaluation
 dotnet run -- --benchmark
-
-# Evaluate existing run results
-dotnet run -- --evaluate ./runs/<run-id>
 ```
+
+## Prerequisites
+
+- .NET 8.0 SDK or later
+- An LLM provider configured in `appsettings.json` (see [main README](../../README.md#llm-provider-setup))
 
 ## Project Structure
 
 ```
 01-prompt-chaining/
-├── src/
-│   └── PromptChaining/
-│       ├── Program.cs                 # Entry point
-│       ├── appsettings.json           # Benchmark configuration
-│       ├── Agents/
-│       │   ├── ResearcherAgent.cs     # Step 1: Gather key points
-│       │   ├── OutlinerAgent.cs       # Step 2: Create structure
-│       │   └── WriterAgent.cs         # Step 3: Write content
-│       ├── Workflows/
-│       │   ├── ContentPipeline.cs     # Multi-agent workflow
-│       │   └── SingleAgentPipeline.cs # Single-agent baseline
-│       └── Benchmarks/
-│           └── PromptChainingBenchmarks.cs  # Benchmark definitions
+├── src/PromptChaining/
+│   ├── Program.cs                    # Entry point with BenchmarkLlmHost
+│   ├── appsettings.json              # LLM provider & benchmark config
+│   └── UseCases/ContentGeneration/
+│       ├── MultiAgentContentPipeline.cs    # 3-agent pipeline
+│       ├── SingleAgentContentPipeline.cs   # Single-agent baseline
+│       └── PromptChainingBenchmarks.cs     # Benchmark definitions
 └── README.md
 ```
 
-## Key Concepts
+## Implementation
 
-### 1. Specialized Agents
+### Multi-Agent Pipeline
 
-Each agent has focused instructions for a specific task:
+Creates three specialized agents chained together:
 
 ```csharp
-public static ChatClientAgent Create(IChatClient chatClient) => new(chatClient, new()
+var researcher = ChatClientFactory.CreateAgent(new AgentConfig
 {
     Name = "Researcher",
-    Instructions = "You are a research assistant. Given a topic, identify 3-5 key points..."
+    Model = "gpt-4.1",
+    Instructions = """
+        You are a research assistant. Given a topic:
+        1. Identify 3-5 key concepts
+        2. List important facts and statistics
+        3. Note the target audience
+        """
 });
-```
 
-### 2. Workflow Builder
+var outliner = ChatClientFactory.CreateAgent(new AgentConfig
+{
+    Name = "Outliner",
+    Model = "gpt-4.1",
+    Instructions = "Create a structured outline from the research..."
+});
 
-Chain agents using the workflow builder:
+var writer = ChatClientFactory.CreateAgent(new AgentConfig
+{
+    Name = "Writer",
+    Model = "gpt-4.1",
+    Instructions = "Write polished content following the outline..."
+});
 
-```csharp
-_workflow = new WorkflowBuilder(researcher)
-    .AddEdge(researcher, outliner)
-    .AddEdge(outliner, writer)
+var workflow = new WorkflowBuilder(researcher.ChatClientAgent)
+    .AddEdge(researcher.ChatClientAgent, outliner.ChatClientAgent)
+    .AddEdge(outliner.ChatClientAgent, writer.ChatClientAgent)
     .Build();
 ```
 
-### 3. Streaming Execution
-
-Get real-time updates as each agent processes:
+### Benchmark Class
 
 ```csharp
-StreamingRun run = await InProcessExecution.StreamAsync(_workflow, messages);
-
-await foreach (WorkflowEvent evt in run.WatchStreamAsync())
+[WorkflowBenchmark(
+    "prompt-chaining",
+    Prompt = "The benefits of test-driven development in software engineering",
+    Description = "Content generation with prompt chaining"
+)]
+public class PromptChainingBenchmarks
 {
-    if (evt is AgentRunUpdateEvent update)
+    [BenchmarkLlm("multi-agent", Description = "3-agent pipeline: Researcher -> Outliner -> Writer")]
+    public async Task<BenchmarkOutput> MultiAgent(string prompt)
     {
-        Console.Write(update.Data);
+        var (workflow, agentModels) = MultiAgentContentPipeline.Create(config);
+        var content = await WorkflowRunner.RunAsync(workflow, prompt);
+        return BenchmarkOutput.WithModels(content, agentModels);
+    }
+
+    [BenchmarkLlm("single-agent", Baseline = true, Description = "Single agent with combined instructions")]
+    public async Task<BenchmarkOutput> SingleAgent(string prompt)
+    {
+        var (workflow, agentModels) = SingleAgentContentPipeline.Create("gpt-4.1");
+        var content = await WorkflowRunner.RunAsync(workflow, prompt);
+        return BenchmarkOutput.WithModels(content, agentModels);
     }
 }
 ```
 
-## Benchmarking
+## Benchmark Results
 
-Compare multi-agent vs single-agent approaches using the built-in benchmark system.
+Using `gpt-4.1` for both approaches:
 
-### Configuration
+| Metric | Multi-Agent | Single-Agent | Difference |
+|--------|-------------|--------------|------------|
+| **Quality Score** | 4.8/5 | 3.6/5 | +33% |
+| API Calls | 3 | 1 | +2 |
+| Total Tokens | ~3,800 | ~1,000 | +267% |
+| Latency | ~25s | ~9s | +16s |
 
-Edit `appsettings.json`:
-
-```json
-{
-  "BenchmarkLlm": {
-    "Prompt": "The benefits of test-driven development",
-    "Filter": "*",
-    "ArtifactsPath": "./runs",
-    "Evaluate": false,
-    "Exporters": ["console", "markdown"]
-  }
-}
-```
-
-### Run Benchmarks
-
-```bash
-# List available benchmarks
-dotnet run -- --list-benchmarks
-
-# Run all benchmarks
-dotnet run -- --benchmark
-
-# Evaluate existing run results (runs LLM-as-Judge on saved outputs)
-dotnet run -- --evaluate ./runs/2024-12-30_143022_benefits-of-tdd
-```
-
-### Available Benchmarks
-
-| Benchmark | Description |
-|-----------|-------------|
-| `multi-agent` | 3-agent pipeline: Researcher → Outliner → Writer |
-| `single-agent` | Single agent with combined instructions (baseline) |
-
-Results are saved to `./runs/` with metrics, outputs, and comparison reports.
+The multi-agent approach produces significantly higher quality content, especially in Evidence Quality (5 vs 2) and Balance (5 vs 3).
 
 ## When to Use This Pattern
 
 **Use Prompt Chaining when:**
 - Breaking complex tasks into focused steps
 - Applying different expertise at each stage
-- Creating reproducible, auditable pipelines
-- Maintaining quality through specialization
+- Quality matters more than speed/cost
+- You need auditable intermediate outputs
 
 **Avoid when:**
 - Tasks require dynamic routing between steps
 - Steps need to run in parallel
 - Single-step processing is sufficient
-
-## Related Patterns
-
-- **Tool Use**: Agents calling external functions
-- **Routing**: Conditional path selection
-- **Parallelization**: Concurrent agent execution
+- Cost/latency is the primary concern
 
 ## Learn More
 
+- [Full Tutorial on DotNetAgents.net](https://dotnetagents.net/tutorials/01-prompt-chaining)
 - [BenchmarkLlm Documentation](../../src/DotNetAgents.BenchmarkLlm/README.md)
-- [Microsoft Agent Framework Docs](https://learn.microsoft.com/en-us/agent-framework/)
+- [Microsoft Agent Framework](https://learn.microsoft.com/en-us/agent-framework/)
+
+---
+
+*Inspired by [Agentic Design Patterns](https://www.amazon.com/Agentic-Design-Patterns-Hands-Intelligent/dp/3032014018) by Antonio Gulli. Implementation uses Microsoft Agent Framework.*
