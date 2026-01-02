@@ -158,13 +158,24 @@ runs/
 
 ## Environment Configuration
 
-Configure the LLM provider via environment variables or `.env` file:
+Provider is specified in code via `AgentConfig.Provider`. Configure credentials via environment variables or `.env` file:
 
 ```bash
-LLM_PROVIDER=openai    # ollama (default), openai, openrouter, azure
-API_KEY=sk-...         # Not needed for Ollama
-MODEL=gpt-4o-mini
-ENDPOINT=...           # Required for Azure, optional for Ollama
+# Azure OpenAI
+AZURE_OPENAI_API_KEY=your-key
+AZURE_OPENAI_ENDPOINT=https://your-resource.openai.azure.com/
+
+# OpenAI
+OPENAI_API_KEY=sk-...
+
+# Ollama (local, no key needed)
+OLLAMA_ENDPOINT=http://localhost:11434
+
+# OpenRouter
+OPENROUTER_API_KEY=sk-or-...
+
+# GitHub Models
+GITHUB_TOKEN=github_pat_...
 ```
 
 ## Per-Agent Model Configuration
@@ -174,8 +185,8 @@ Override the model for specific agents in code:
 ```csharp
 using DotNetAgents.Infrastructure;
 
-var defaultClient = ChatClientFactory.Create();
-var writerClient = ChatClientFactory.Create("gpt-4o");  // Use stronger model
+var defaultClient = ChatClientFactory.Create("azure", "gpt-4o-mini");
+var writerClient = ChatClientFactory.Create("azure", "gpt-4o");  // Use stronger model
 ```
 
 ## Metrics Collected

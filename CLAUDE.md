@@ -53,20 +53,16 @@ dotnet tool restore && dotnet csharpier .
 
 ## LLM Provider Configuration
 
-Set via environment variables or `.env` file:
+Provider is specified explicitly in code via `AgentConfig.Provider` or `ChatClientFactory.Create(provider, model)`.
+Each provider uses its own environment variables (set via shell or `.env` file):
 
-| Variable | Description |
-|----------|-------------|
-| `LLM_PROVIDER` | Provider: `ollama` (default), `openai`, `azure`, `openrouter` |
-| `API_KEY` | API key (not needed for Ollama) |
-| `ENDPOINT` | Endpoint URL (required for Azure, optional for Ollama) |
-| `MODEL` | Default model name |
-
-**Provider Details**:
-- **Ollama**: Local, free, default endpoint `http://localhost:11434`
-- **OpenAI**: Requires `API_KEY`
-- **Azure OpenAI**: Requires `API_KEY` and `ENDPOINT`
-- **OpenRouter**: Requires `API_KEY`, endpoint `https://openrouter.ai/api/v1`
+| Provider | Environment Variables |
+|----------|----------------------|
+| `azure` | `AZURE_OPENAI_API_KEY`, `AZURE_OPENAI_ENDPOINT` |
+| `openai` | `OPENAI_API_KEY`, `OPENAI_ENDPOINT` (optional) |
+| `ollama` | `OLLAMA_ENDPOINT` (optional, defaults to `http://localhost:11434`) |
+| `openrouter` | `OPENROUTER_API_KEY`, `OPENROUTER_ENDPOINT` (optional) |
+| `github` | `GITHUB_TOKEN`, `GITHUB_MODELS_ENDPOINT` (optional) |
 
 Configuration is loaded from `.env` files (searches up the directory tree).
 

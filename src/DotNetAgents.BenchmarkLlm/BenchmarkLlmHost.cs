@@ -19,12 +19,22 @@ public static class BenchmarkLlmHost
         CancellationToken cancellationToken = default
     )
     {
-        // EvaluationModel is required only when evaluation is enabled
-        if (settings.Evaluate && string.IsNullOrEmpty(settings.EvaluationModel))
+        // EvaluationProvider and EvaluationModel are required when evaluation is enabled
+        if (settings.Evaluate)
         {
-            Console.WriteLine("Error: EvaluationModel is required when Evaluate is true.");
-            Console.WriteLine("Examples: 'gpt-4o', 'gpt-4o-mini'");
-            return;
+            if (string.IsNullOrEmpty(settings.EvaluationProvider))
+            {
+                Console.WriteLine("Error: EvaluationProvider is required when Evaluate is true.");
+                Console.WriteLine("Valid providers: ollama, openai, azure, openrouter, github");
+                return;
+            }
+
+            if (string.IsNullOrEmpty(settings.EvaluationModel))
+            {
+                Console.WriteLine("Error: EvaluationModel is required when Evaluate is true.");
+                Console.WriteLine("Examples: 'gpt-4o', 'gpt-4o-mini'");
+                return;
+            }
         }
 
         PrintHeader();
@@ -65,7 +75,7 @@ public static class BenchmarkLlmHost
 
         // Create evaluator (benchmarks create their own clients via ChatClientFactory)
         IContentEvaluator? evaluator = settings.Evaluate
-            ? new LlmJudgeEvaluator(ChatClientFactory.Create(settings.EvaluationModel!))
+            ? CreateEvaluator(settings.EvaluatorType, settings.EvaluationProvider!, settings.EvaluationModel!)
             : null;
 
         // Run benchmarks
@@ -98,7 +108,7 @@ public static class BenchmarkLlmHost
             Console.WriteLine("Running comparative analysis...");
 
             var comparativeEvaluator = new ComparativeEvaluator(
-                ChatClientFactory.Create(settings.EvaluationModel!)
+                ChatClientFactory.Create(settings.EvaluationProvider!, settings.EvaluationModel!)
             );
             var analysis = await comparativeEvaluator.CompareAsync(results, cancellationToken);
 
@@ -156,8 +166,8 @@ public static class BenchmarkLlmHost
         Console.WriteLine($"Prompt: {prompt}");
         Console.WriteLine();
 
-        // Create evaluator
-        var evaluator = new LlmJudgeEvaluator(ChatClientFactory.Create(model));
+        // Create evaluator (use default provider for evaluation)
+        var evaluator = new LlmJudgeEvaluator(ChatClientFactory.Create("azure", model));
 
         // Find all benchmark output files
         var results =
@@ -382,9 +392,6 @@ public static class BenchmarkLlmHost
 
     private static void PrintEnvironmentInfo(string model)
     {
-        Console.WriteLine(
-            $"Provider: {Environment.GetEnvironmentVariable("LLM_PROVIDER") ?? "ollama"}"
-        );
         Console.WriteLine($"Model: {model}");
         Console.WriteLine();
     }
@@ -409,5 +416,19 @@ public static class BenchmarkLlmHost
             }
         }
         return exporters;
+    }
+
+    private static IContentEvaluator CreateEvaluator(
+        string evaluatorType,
+        string provider,
+        string model
+    )
+    {
+        var client = ChatClientFactory.Create(provider, model);
+        return evaluatorType.ToLowerInvariant() switch
+        {
+            "task" or "agent" => new AgentTaskEvaluator(client),
+            _ => new LlmJudgeEvaluator(client),
+        };
     }
 }

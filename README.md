@@ -101,6 +101,21 @@ The LLM-as-Judge evaluates content across 8 dimensions:
 - Completeness, Structure, Accuracy, Engagement
 - Evidence Quality, Balance, Actionability, Depth
 
+### Latest Benchmark Results
+
+Comparing cloud (Azure gpt-4.1) vs local (Ollama llama3.2) multi-agent pipelines:
+
+| Benchmark | Model | Words | Tokens | Latency | Quality |
+|-----------|-------|------:|-------:|--------:|:-------:|
+| single-agent (baseline) | gpt-4.1 | 681 | 1,082 | 30s | 3.6/5 |
+| multi-agent | gpt-4.1 | 1,433 | 4,506 | 27s | **4.4/5** |
+| multi-agent-local | llama3.2 | 507 | 2,945 | 138s | 3.2/5 |
+
+**Key findings:**
+- Multi-agent architecture improves quality +22% over single-agent
+- Local models (Ollama) enable free, private development
+- Cloud models still lead in quality and speed
+
 ## Project Structure
 
 ```

@@ -9,12 +9,13 @@ namespace DotNetAgents.Patterns.PromptChaining.UseCases.ContentGeneration;
 /// </summary>
 public static class SingleAgentContentPipeline
 {
-    public static (Workflow, Dictionary<string, string>) Create(string model)
+    public static (Workflow, Dictionary<string, string>) Create(string provider, string model)
     {
-        var writer = ChatClientFactory.CreateAgent(
+        var writer = new AgentExecutor(
             new AgentConfig
             {
                 Name = "CombinedContentAgent",
+                Provider = provider,
                 Model = model,
                 Instructions = """
                 You are a professional content writer who creates engaging, well-structured articles.
@@ -47,7 +48,7 @@ public static class SingleAgentContentPipeline
                 """,
             }
         );
-        var workflow = new WorkflowBuilder(writer.ChatClientAgent).Build();
+        var workflow = new WorkflowBuilder(writer).Build();
         var agentModels = new Dictionary<string, string> { { writer.Name, writer.Model } };
         return (workflow, agentModels);
     }

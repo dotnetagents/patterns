@@ -51,8 +51,6 @@ public sealed class RunManager
     {
         var envData = new
         {
-            Provider = Environment.GetEnvironmentVariable("LLM_PROVIDER") ?? "ollama",
-            Model = Environment.GetEnvironmentVariable("MODEL") ?? "default",
             Runtime = System.Runtime.InteropServices.RuntimeInformation.FrameworkDescription,
             MachineName = Environment.MachineName,
             Timestamp = DateTime.UtcNow,

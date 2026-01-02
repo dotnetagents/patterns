@@ -3,15 +3,17 @@
 // Pipeline: Research -> Outline -> Write
 //
 // Usage:
-//   dotnet run                                        # Interactive demo (model from appsettings.json)
-//   dotnet run -- --model gpt-4o                      # Interactive demo with explicit model
-//   dotnet run -- --benchmark                         # Run benchmarks (config from appsettings.json)
-//   dotnet run -- --list-benchmarks                   # List available benchmarks
-//   dotnet run -- --evaluate ./runs/<id>              # Evaluate existing run results
-//   dotnet run -- --evaluate ./runs/<id> --model gpt-4o  # Evaluate with explicit model
+//   dotnet run -- --provider azure --model gpt-4.1    # Interactive mode
+//   dotnet run -- --benchmark                          # Run benchmarks
+//   dotnet run -- --list-benchmarks                    # List available benchmarks
+//   dotnet run -- --evaluate ./runs/<id>               # Evaluate existing run results
 
 using DotNetAgents.BenchmarkLlm;
+using DotNetAgents.Infrastructure;
+using DotNetAgents.Patterns.PromptChaining.UseCases.ContentGeneration;
 using Microsoft.Extensions.Configuration;
+
+var cli = new CliArgs(args);
 
 // Load configuration from appsettings.json
 var configuration = new ConfigurationBuilder()
@@ -19,30 +21,18 @@ var configuration = new ConfigurationBuilder()
     .AddJsonFile("appsettings.json", true, false)
     .Build();
 
-// Check for list benchmarks mode
-if (args.Contains("--list-benchmarks") || args.Contains("--list"))
+// List benchmarks mode
+if (cli.IsList)
 {
     BenchmarkLlmHost.ListBenchmarks();
     return;
 }
 
-// Check for evaluate mode
-var evaluateIndex = Array.IndexOf(args, "--evaluate");
-if (evaluateIndex == -1)
+// Evaluate mode
+if (cli.EvaluatePath != null)
 {
-    evaluateIndex = Array.IndexOf(args, "-e");
-}
-
-if (evaluateIndex >= 0 && evaluateIndex < args.Length - 1)
-{
-    var runPath = args[evaluateIndex + 1];
-    // Get model from --model arg or settings
-    var modelIndex = Array.IndexOf(args, "--model");
     var settings = configuration.GetSection("BenchmarkLlm").Get<BenchmarkLlmSettings>();
-    var model =
-        modelIndex >= 0 && modelIndex < args.Length - 1
-            ? args[modelIndex + 1]
-            : settings?.EvaluationModel ?? settings?.Model;
+    var model = cli.Model ?? settings?.EvaluationModel;
 
     if (string.IsNullOrEmpty(model))
     {
@@ -51,34 +41,46 @@ if (evaluateIndex >= 0 && evaluateIndex < args.Length - 1)
         return;
     }
 
-    await BenchmarkLlmHost.EvaluateRunAsync(runPath, model);
+    await BenchmarkLlmHost.EvaluateRunAsync(cli.EvaluatePath, model);
     return;
 }
 
-// Check for benchmark mode
-if (args.Contains("--benchmark") || args.Contains("-b"))
+// Benchmark mode
+if (cli.IsBenchmark)
 {
-    var settings =
-        configuration.GetSection("BenchmarkLlm").Get<BenchmarkLlmSettings>()
-        ?? new BenchmarkLlmSettings();
+    var settings = configuration.GetSection("BenchmarkLlm").Get<BenchmarkLlmSettings>()
+                   ?? new BenchmarkLlmSettings();
+
+    if (cli.Filter != null)
+    {
+        settings.Filter = cli.Filter;
+    }
+
     await BenchmarkLlmHost.RunAsync(settings);
     return;
 }
 
-// Normal interactive mode
-var interactiveSettings = configuration.GetSection("BenchmarkLlm").Get<BenchmarkLlmSettings>();
-var interactiveModel = interactiveSettings?.Model;
-
-// Check for --model CLI override
-var interactiveModelIndex = Array.IndexOf(args, "--model");
-if (interactiveModelIndex >= 0 && interactiveModelIndex < args.Length - 1)
+// Interactive mode
+if (!cli.ValidateInteractiveArgs(out var error))
 {
-    interactiveModel = args[interactiveModelIndex + 1];
+    Console.WriteLine(error);
+    Console.WriteLine();
+    CliArgs.PrintUsage("prompt-chaining");
+    return;
 }
 
-if (string.IsNullOrEmpty(interactiveModel))
-{
-    Console.WriteLine("Error: Model is required.");
-    Console.WriteLine("Set Model in appsettings.json or use --model <model-id>");
-    Console.WriteLine("Examples: 'gpt-4o', 'gpt-4o-mini', 'llama3.2'");
-}
+var (workflow, _) = MultiAgentContentPipeline.Create(
+    new MultiAgentContentPipelineConfig
+    {
+        Provider = cli.Provider!,
+        ResearcherModel = cli.Model!,
+        OutlinerModel = cli.Model!,
+        WriterModel = cli.Model!
+    }
+);
+
+var content = await WorkflowRunner.RunAsync(
+    workflow,
+    "The benefits of test-driven development in software engineering");
+Console.WriteLine("Generated Content:");
+Console.WriteLine(content);

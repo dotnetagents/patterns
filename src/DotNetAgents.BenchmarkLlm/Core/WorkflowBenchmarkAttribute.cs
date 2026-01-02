@@ -3,7 +3,7 @@ namespace DotNetAgents.BenchmarkLlm.Core;
 /// <summary>
 /// Marks a class as containing LLM workflow benchmarks.
 /// </summary>
-[AttributeUsage(AttributeTargets.Class, AllowMultiple = false)]
+[AttributeUsage(AttributeTargets.Class)]
 public sealed class WorkflowBenchmarkAttribute : Attribute
 {
     public string Category { get; }

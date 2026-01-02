@@ -113,16 +113,38 @@ public class PromptChainingBenchmarks
 
 ## Benchmark Results
 
-Using `gpt-4.1` for both approaches:
+### Cloud vs Local Comparison
 
-| Metric | Multi-Agent | Single-Agent | Difference |
-|--------|-------------|--------------|------------|
-| **Quality Score** | 4.8/5 | 3.6/5 | +33% |
-| API Calls | 3 | 1 | +2 |
-| Total Tokens | ~3,800 | ~1,000 | +267% |
-| Latency | ~25s | ~9s | +16s |
+| Benchmark | Model | Words | Tokens | Latency | Quality |
+|-----------|-------|------:|-------:|--------:|:-------:|
+| single-agent (baseline) | gpt-4.1 | 681 | 1,082 | 30s | 3.6/5 |
+| multi-agent | gpt-4.1 | 1,433 | 4,506 | 27s | **4.4/5** |
+| multi-agent-local | llama3.2 | 507 | 2,945 | 138s | 3.2/5 |
 
-The multi-agent approach produces significantly higher quality content, especially in Evidence Quality (5 vs 2) and Balance (5 vs 3).
+### Quality Breakdown
+
+| Dimension | single-agent | multi-agent | multi-agent-local |
+|-----------|:------------:|:-----------:|:-----------------:|
+| Completeness | 4 | 4 | 4 |
+| Structure | 5 | 5 | 4 |
+| Accuracy | 5 | 5 | 4 |
+| Engagement | 4 | 4 | 3 |
+| Evidence | 3 | 4 | 3 |
+| Balance | 2 | **5** | 2 |
+| Actionability | 2 | 4 | 3 |
+| Depth | 4 | 4 | 3 |
+
+### Key Findings
+
+**Multi-agent (gpt-4.1)** delivers the best quality:
+- +110% more words with richer, more comprehensive content
+- Balance score of 5 (vs 2) - covers pros AND cons of TDD
+- Cites specific research (Microsoft, 40-60% defect reduction)
+
+**Multi-agent-local (Ollama llama3.2)** enables local development:
+- Runs entirely offline, no API costs
+- Concise and practical with best practices
+- Quality gap (-0.4 vs baseline) shows room for improvement
 
 ## When to Use This Pattern
 

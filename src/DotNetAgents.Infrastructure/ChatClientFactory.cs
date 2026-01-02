@@ -1,7 +1,6 @@
 using System.ClientModel;
 using Azure.AI.OpenAI;
 using DotNetEnv;
-using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
 using OllamaSharp;
 using OpenAI;
@@ -11,29 +10,28 @@ namespace DotNetAgents.Infrastructure;
 
 /// <summary>
 /// Factory for creating IChatClient instances based on environment configuration.
-/// Supports: Azure OpenAI, OpenAI, OpenRouter, and Ollama (local).
+/// Supports: Azure OpenAI, OpenAI, OpenRouter, GitHub Models, and Ollama (local).
 /// </summary>
 /// <remarks>
-/// Environment variables:
-/// - LLM_PROVIDER: "ollama" (default), "openai", "openrouter", "azure"
-/// - API_KEY: API key for the provider (not needed for Ollama)
-/// - ENDPOINT: Endpoint URL (required for Azure, optional for Ollama)
+/// Each provider uses its own environment variables, allowing multiple providers
+/// to be configured simultaneously for benchmarking:
+///
+/// - Ollama:      OLLAMA_ENDPOINT (optional, defaults to http://localhost:11434)
+/// - OpenAI:      OPENAI_API_KEY, OPENAI_ENDPOINT (optional)
+/// - Azure:       AZURE_OPENAI_API_KEY, AZURE_OPENAI_ENDPOINT
+/// - OpenRouter:  OPENROUTER_API_KEY, OPENROUTER_ENDPOINT (optional, defaults to https://openrouter.ai/api/v1)
+/// - GitHub:      GITHUB_TOKEN, GITHUB_MODELS_ENDPOINT (optional, defaults to https://models.github.ai/inference)
+///
+/// Provider must always be specified explicitly in code via Create(provider, model) or AgentConfig.Provider.
 /// </remarks>
 public static class ChatClientFactory
 {
     private static bool _envLoaded;
-    private static Func<IChatClient, string, IChatClient>? _wrapper;
 
-    public static IDisposable UseWrapper(Func<IChatClient, string, IChatClient> wrapper)
-    {
-        _wrapper = wrapper;
-        return new WrapperScope(() => _wrapper = null);
-    }
-
-    private sealed class WrapperScope(Action onDispose) : IDisposable
-    {
-        public void Dispose() => onDispose();
-    }
+    /// <summary>
+    /// Source name for OpenTelemetry instrumentation.
+    /// </summary>
+    public const string TelemetrySourceName = "DotNetAgents.Benchmark";
 
     private static void EnsureEnvLoaded()
     {
@@ -56,23 +54,22 @@ public static class ChatClientFactory
         }
     }
 
-    public static ConfiguredAgent CreateAgent(AgentConfig config)
+    /// <summary>
+    /// Creates a chat client for a specific provider.
+    /// </summary>
+    /// <param name="provider">Provider name: "ollama", "openai", "azure", "openrouter", "github"</param>
+    /// <param name="model">Model name (e.g., "gpt-4o", "llama3.2")</param>
+    public static IChatClient Create(string provider, string model)
     {
-        return new ConfiguredAgent
+        if (string.IsNullOrWhiteSpace(provider))
         {
-            Name = config.Name,
-            Model = config.Model,
-            Instructions = config.Instructions,
-            ChatClientAgent = new(
-                Create(config.Model),
-                instructions: config.Instructions,
-                name: config.Name
-            ),
-        };
-    }
+            throw new ArgumentException(
+                "Provider must be explicitly specified. "
+                    + "Valid providers: ollama, openai, azure, openrouter, github",
+                nameof(provider)
+            );
+        }
 
-    public static IChatClient Create(string model)
-    {
         if (string.IsNullOrWhiteSpace(model))
         {
             throw new ArgumentException(
@@ -85,9 +82,7 @@ public static class ChatClientFactory
         // Load .env file if present
         EnsureEnvLoaded();
 
-        string provider =
-            Environment.GetEnvironmentVariable("LLM_PROVIDER")?.ToLowerInvariant() ?? "ollama";
-
+        provider = provider.ToLowerInvariant();
         Console.WriteLine($"[ChatClientFactory] Provider: {provider}, Model: {model}");
 
         var client = provider switch
@@ -95,30 +90,36 @@ public static class ChatClientFactory
             "azure" => CreateAzureOpenAIClient(model),
             "openai" => CreateOpenAIClient(model),
             "openrouter" => CreateOpenRouterClient(model),
-            "ollama" or _ => CreateOllamaClient(model),
+            "github" => CreateGitHubModelsClient(model),
+            "ollama" => CreateOllamaClient(model),
+            _ => throw new ArgumentException(
+                $"Unknown provider: {provider}. Valid providers: ollama, openai, azure, openrouter, github",
+                nameof(provider)
+            ),
         };
 
-        return _wrapper != null ? _wrapper(client, model) : client;
+        // Always apply OpenTelemetry instrumentation for observability
+        return client.AsBuilder()
+            .UseOpenTelemetry(
+                sourceName: TelemetrySourceName,
+                configure: c => c.EnableSensitiveData = false)
+            .Build();
     }
 
-    private static string GetApiKey() =>
-        Environment.GetEnvironmentVariable("API_KEY")
+    private static string GetEnvVar(string name) =>
+        Environment.GetEnvironmentVariable(name)
         ?? throw new InvalidOperationException(
-            "API_KEY environment variable not set. "
-                + "See: https://dotnetagents.net/getting-started"
+            $"{name} environment variable not set. "
+                + "See: https://dotnetagents.net/blog/setting-up-agent-environment"
         );
 
-    private static string? GetEndpoint() => Environment.GetEnvironmentVariable("ENDPOINT");
+    private static string? GetEnvVarOptional(string name) =>
+        Environment.GetEnvironmentVariable(name);
 
     private static IChatClient CreateAzureOpenAIClient(string model)
     {
-        string apiKey = GetApiKey();
-        string endpoint =
-            GetEndpoint()
-            ?? throw new InvalidOperationException(
-                "ENDPOINT environment variable not set for Azure. "
-                    + "See: https://dotnetagents.net/getting-started"
-            );
+        string apiKey = GetEnvVar("AZURE_OPENAI_API_KEY");
+        string endpoint = GetEnvVar("AZURE_OPENAI_ENDPOINT");
 
         return new AzureOpenAIClient(new Uri(endpoint), new ApiKeyCredential(apiKey))
             .GetChatClient(model)
@@ -127,18 +128,40 @@ public static class ChatClientFactory
 
     private static IChatClient CreateOpenAIClient(string model)
     {
-        string apiKey = GetApiKey();
+        string apiKey = GetEnvVar("OPENAI_API_KEY");
+        string? endpoint = GetEnvVarOptional("OPENAI_ENDPOINT");
+
+        if (endpoint != null)
+        {
+            var options = new OpenAIClientOptions { Endpoint = new Uri(endpoint) };
+            return new OpenAIClient(new ApiKeyCredential(apiKey), options)
+                .GetChatClient(model)
+                .AsIChatClient();
+        }
+
         return new ChatClient(model, apiKey).AsIChatClient();
     }
 
     private static IChatClient CreateOpenRouterClient(string model)
     {
-        string apiKey = GetApiKey();
+        string apiKey = GetEnvVar("OPENROUTER_API_KEY");
+        string endpoint =
+            GetEnvVarOptional("OPENROUTER_ENDPOINT") ?? "https://openrouter.ai/api/v1";
 
-        var options = new OpenAIClientOptions
-        {
-            Endpoint = new Uri("https://openrouter.ai/api/v1"),
-        };
+        var options = new OpenAIClientOptions { Endpoint = new Uri(endpoint) };
+
+        return new OpenAIClient(new ApiKeyCredential(apiKey), options)
+            .GetChatClient(model)
+            .AsIChatClient();
+    }
+
+    private static IChatClient CreateGitHubModelsClient(string model)
+    {
+        string apiKey = GetEnvVar("GITHUB_TOKEN");
+        string endpoint =
+            GetEnvVarOptional("GITHUB_MODELS_ENDPOINT") ?? "https://models.github.ai/inference";
+
+        var options = new OpenAIClientOptions { Endpoint = new Uri(endpoint) };
 
         return new OpenAIClient(new ApiKeyCredential(apiKey), options)
             .GetChatClient(model)
@@ -147,7 +170,7 @@ public static class ChatClientFactory
 
     private static IChatClient CreateOllamaClient(string model)
     {
-        string endpoint = GetEndpoint() ?? "http://localhost:11434";
+        string endpoint = GetEnvVarOptional("OLLAMA_ENDPOINT") ?? "http://localhost:11434";
         return new OllamaApiClient(new Uri(endpoint), model);
     }
 }

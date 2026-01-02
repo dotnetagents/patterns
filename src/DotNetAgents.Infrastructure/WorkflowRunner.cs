@@ -9,14 +9,13 @@ public static class WorkflowRunner
     public static async Task<string> RunAsync(
         Workflow workflow,
         string prompt,
+        string? keepExecutorIdOnly = null,
         CancellationToken cancellationToken = default
     )
     {
-        var messages = new List<ChatMessage> { new(ChatRole.User, prompt) };
-
         var run = await InProcessExecution.StreamAsync(
             workflow,
-            messages,
+            new ChatMessage(ChatRole.User, prompt),
             cancellationToken: cancellationToken
         );
         await run.TrySendMessageAsync(new TurnToken(true));
@@ -27,7 +26,7 @@ public static class WorkflowRunner
 
         await foreach (var evt in run.WatchStreamAsync().WithCancellation(cancellationToken))
         {
-            if (evt is AgentRunUpdateEvent updateEvent)
+            if (evt is ExecutorCompletedEvent updateEvent)
             {
                 // When agent changes, reset buffer to only keep last agent's output
                 if (currentAgent != updateEvent.ExecutorId)

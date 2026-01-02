@@ -9,4 +9,9 @@
   <ItemGroup>
     <ProjectReference Include="..\DotNetAgents.Infrastructure\DotNetAgents.Infrastructure.csproj" />
   </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="OpenTelemetry" Version="1.*" />
+    <PackageReference Include="OpenTelemetry.Exporter.InMemory" Version="1.*" />
+  </ItemGroup>
 </Project>

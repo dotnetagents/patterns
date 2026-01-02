@@ -4,7 +4,7 @@ namespace DotNetAgents.BenchmarkLlm.Core;
 /// Marks a method as an LLM benchmark.
 /// The method should have signature: Task&lt;string&gt; MethodName(string topic, IChatClient client)
 /// </summary>
-[AttributeUsage(AttributeTargets.Method, AllowMultiple = false)]
+[AttributeUsage(AttributeTargets.Method)]
 public sealed class BenchmarkLlmAttribute : Attribute
 {
     public string Name { get; }

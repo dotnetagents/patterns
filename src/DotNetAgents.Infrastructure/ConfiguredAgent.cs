@@ -10,5 +10,7 @@ public class ConfiguredAgent
 
     public required string Model { get; init; }
 
+    public required string Provider { get; init; }
+
     public required ChatClientAgent ChatClientAgent { get; set; }
 }

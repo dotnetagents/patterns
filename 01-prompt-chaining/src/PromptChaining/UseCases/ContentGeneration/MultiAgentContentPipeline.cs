@@ -5,6 +5,8 @@ namespace DotNetAgents.Patterns.PromptChaining.UseCases.ContentGeneration;
 
 public sealed class MultiAgentContentPipelineConfig
 {
+    public required string Provider { get; init; }
+
     public required string ResearcherModel { get; init; }
 
     public required string OutlinerModel { get; init; }
@@ -20,10 +22,11 @@ public static class MultiAgentContentPipeline
     {
         // Create specialized agents with configured models
         // Use factory if provided for metrics tracking, otherwise create directly
-        var researcher = ChatClientFactory.CreateAgent(
+        var researcher = new AgentExecutor(
             new AgentConfig
             {
                 Name = "Researcher",
+                Provider = config.Provider,
                 Model = config.ResearcherModel,
                 Instructions = """
                 You are a research assistant specializing in gathering and synthesizing information.
@@ -40,10 +43,11 @@ public static class MultiAgentContentPipeline
             }
         );
 
-        var outliner = ChatClientFactory.CreateAgent(
+        var outliner = new AgentExecutor(
             new AgentConfig
             {
                 Name = "Outliner",
+                Provider = config.Provider,
                 Model = config.OutlinerModel,
                 Instructions = """
                 You are a content strategist who creates clear, logical outlines.
@@ -60,10 +64,11 @@ public static class MultiAgentContentPipeline
             }
         );
 
-        var writer = ChatClientFactory.CreateAgent(
+        var writer = new AgentExecutor(
             new AgentConfig
             {
                 Name = "Writer",
+                Provider = config.Provider,
                 Model = config.WriterModel,
                 Instructions = """
                 You are a professional content writer who creates engaging, well-structured articles.
@@ -83,16 +88,16 @@ public static class MultiAgentContentPipeline
         );
 
         // Track model configuration
-        var agentModels = new List<ConfiguredAgent> { researcher, outliner, writer }.ToDictionary(
+        var agentModels = new List<AgentExecutor> { researcher, outliner, writer }.ToDictionary(
             agent => agent.Name,
             agent => agent.Model
         );
 
         // Build workflow
         return (
-            new WorkflowBuilder(researcher.ChatClientAgent)
-                .AddEdge(researcher.ChatClientAgent, outliner.ChatClientAgent)
-                .AddEdge(outliner.ChatClientAgent, writer.ChatClientAgent)
+            new WorkflowBuilder(researcher)
+                .AddEdge(researcher, outliner)
+                .AddEdge(outliner, writer)
                 .Build(),
             agentModels
         );
