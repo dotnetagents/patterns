@@ -45,14 +45,18 @@ Add a reference to `DotNetAgents.BenchmarkLlm` in your pattern project:
 ```json
 {
   "BenchmarkLlm": {
-    "Prompt": "Benefits of Test-Driven Development",
     "Filter": "*",
     "ArtifactsPath": "./runs",
     "Evaluate": false,
+    "EvaluationProvider": "azure",
+    "EvaluationModel": "gpt-4o-mini",
+    "EvaluatorType": "content",
     "Exporters": ["console", "markdown"]
   }
 }
 ```
+
+Note: The prompt is defined in the `[WorkflowBenchmark]` attribute, not in settings.
 
 ### 4. Update Program.cs
 
@@ -128,11 +132,13 @@ public async Task<string> BenchmarkMethod(string prompt, IChatClient client)
 
 | Setting | Description | Default |
 |---------|-------------|---------|
-| `Prompt` | Input prompt for content generation | Required |
 | `Filter` | Glob pattern to select benchmarks | `*` |
 | `ArtifactsPath` | Output directory for results | `./runs` |
 | `RunId` | Custom run identifier | Auto-generated |
 | `Evaluate` | Enable LLM-as-Judge quality scoring | `false` |
+| `EvaluationProvider` | Provider for evaluation (required when Evaluate=true) | - |
+| `EvaluationModel` | Model for evaluation (required when Evaluate=true) | - |
+| `EvaluatorType` | Evaluator type: "content" or "task" | `"content"` |
 | `Exporters` | List of exporters: console, markdown, json | `["console"]` |
 
 ## Output Structure
@@ -191,22 +197,34 @@ var writerClient = ChatClientFactory.Create("azure", "gpt-4o");  // Use stronger
 
 ## Metrics Collected
 
-Each benchmark run collects:
+Metrics are collected automatically via OpenTelemetry instrumentation. Each benchmark run captures:
 
-- **Timing**: Total duration, time to first token
+- **Timing**: Total duration, latency per call
 - **Tokens**: Input tokens, output tokens, total tokens
 - **Calls**: Number of LLM API calls
-- **Quality** (with Evaluate=true): Completeness, Structure, Accuracy, Engagement scores (1-5)
+- **Quality** (with Evaluate=true): Completeness, Structure, Accuracy, Engagement, Evidence, Balance, Actionability, Depth scores (1-5)
 
 ## LLM-as-Judge Evaluation
 
-When `Evaluate` is enabled, a separate LLM call evaluates each output on:
+When `Evaluate` is enabled, a separate LLM call evaluates each output. Two evaluator types are available:
+
+### Content Evaluator (default)
+For content generation tasks like articles and summaries. Set `EvaluatorType: "content"`.
+
+### Agent Task Evaluator
+For tool-use and multi-step agent workflows. Set `EvaluatorType: "task"`. Focuses on task completion rather than writing quality.
+
+Both evaluators score on 8 dimensions (1-5 scale):
 
 | Dimension | Description |
 |-----------|-------------|
-| Completeness | Coverage of key points |
-| Structure | Organization and flow |
-| Accuracy | Factual correctness |
-| Engagement | Writing quality and readability |
+| Completeness | Coverage of topic/task completion |
+| Structure | Organization and logical flow |
+| Accuracy | Factual/decision correctness |
+| Engagement | Communication quality |
+| Evidence Quality | Use of data/tool responses |
+| Balance | Appropriate scope |
+| Actionability | Practical guidance/actions taken |
+| Depth | Handling of details and edge cases |
 
 Scores are 1-5 with an overall average.
