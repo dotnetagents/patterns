@@ -119,7 +119,7 @@ static string GetSystemPrompt() => """
 
     When users ask math questions:
     1. Use the available calculator tools to compute results
-    2. Show your work by explaining which operations you performed
+    2. Show your work by explaining which operations you performed and which tools you called
     3. Provide clear, accurate answers
 
     Available operations include basic arithmetic, powers, roots, factorials,
