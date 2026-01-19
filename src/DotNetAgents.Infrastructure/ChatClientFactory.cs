@@ -33,7 +33,11 @@ public static class ChatClientFactory
     /// </summary>
     public const string TelemetrySourceName = "DotNetAgents.Benchmark";
 
-    private static void EnsureEnvLoaded()
+    /// <summary>
+    /// Ensures the .env file is loaded. Call this early in Program.cs if you need
+    /// environment variables before creating any chat clients.
+    /// </summary>
+    public static void EnsureEnvLoaded()
     {
         if (_envLoaded)
             return;
